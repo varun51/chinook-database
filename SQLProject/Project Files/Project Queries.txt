@@ -1,0 +1,159 @@
+------------------------------********-------Data Cleaning----------------------------------
+ ----------------------1) Are there any albums owned by multiple artist?----------------
+
+SELECT X."Name" ARTISTNAME,
+	X."AlbumId",
+	COUNT(1)
+FROM
+	(SELECT *
+		FROM PUBLIC."Album" AL
+		JOIN PUBLIC."Artist" AR ON AL."ArtistId" = AR."ArtistId")X
+GROUP BY 1,2
+HAVING COUNT(1) > 1 ------------------2) Is there any invoice which is issued to a non existing customer?-------------------------
+
+SELECT *
+FROM PUBLIC."Invoice" AS I
+WHERE I."CustomerId" IN
+		(SELECT "CustomerId"
+			FROM PUBLIC."Customer") 
+			
+			--------Find the artist who has contributed with the maximum no of songs. Display the artist name and the no of albums.
+			
+			SELECT "AlbumId",
+	"Title",
+	"ArtistId",
+	COUNT(1)
+FROM PUBLIC."Album"
+GROUP BY 1,2
+HAVING COUNT(1) > 1
+SELECT AR."Name",
+	AL."Title",
+	COUNT(1)
+FROM PUBLIC."Artist" AR
+JOIN PUBLIC."Album" AL ON AR."ArtistId" = AL."ArtistId"
+GROUP BY 1,2
+HAVING COUNT(1) > 1
+			
+			
+		------** Find the artist who has contributed with the maximum no of songs. Display the artist name and the no of albums-------
+		
+		
+		
+		SELECT Y."Name" AS "Artist_Name",
+	COUNT(Y."cnt") AS "Total_no_of_songs"
+FROM
+	(SELECT X."Title",
+			X."Name",
+			X."cnt"
+		FROM
+			(SELECT *,
+					ROW_NUMBER() OVER(PARTITION BY AL."AlbumId") AS CNT
+				FROM PUBLIC."Album" AL
+				JOIN PUBLIC."Track" TR ON AL."AlbumId" = TR."AlbumId"
+				ORDER BY 1)X)Y
+GROUP BY 1
+ORDER BY 2 DESC
+			
+	----Display the name, email id, country of all listeners who love Jazz, Rock and Pop music.-------------
+	
+	WITH CUSTOMER_TRACKID_INFO AS
+	(SELECT X."CustomerId",
+			X."TrackId" AS TRACKID
+		FROM
+			(SELECT *
+				FROM PUBLIC."Invoice" INV
+				JOIN PUBLIC."InvoiceLine" INVL ON INV."InvoiceId" = INVL."InvoiceId")X),
+	GENRE_INFO AS
+	(SELECT Y."trackid",
+			Y."CustomerId",
+			Y."GenreId" AS GEN_ID
+		FROM
+			(SELECT *
+				FROM PUBLIC."Track" TR
+				JOIN CUSTOMER_TRACKID_INFO CT ON TR."TrackId" = CT."trackid")Y),
+	GENE_ALL_INFO AS
+	(SELECT Z."trackid",
+			Z."CustomerId",
+			Z."GenreId",
+			Z."Name"
+		FROM
+			(SELECT *
+				FROM GENRE_INFO GI
+				RIGHT JOIN PUBLIC."Genre" GE ON GE."GenreId" = GI."gen_id")Z),
+	CUSTOMER_GENRE_INFO AS
+	(SELECT A."FirstName",
+			A."Country",
+			A."Email",
+			A."Name"
+		FROM
+			(SELECT *
+				FROM GENE_ALL_INFO GA
+				JOIN PUBLIC."Customer" CU ON CU."CustomerId" = GA."CustomerId")A)
+SELECT *
+FROM CUSTOMER_GENRE_INFO CGI
+WHERE CGI."Name" IN ('Rock','Jazz','Pop')
+
+------Find the employee who has supported the most no of customers. Display the employee name and designation---------
+
+SELECT G."FirstName",
+	G."Employee Designation",
+	G."max" AS NO_OF_CUSTOMERS
+FROM
+	(SELECT *,
+			MAX(ROW_NUM) OVER (PARTITION BY V."FirstName")
+		FROM
+			(SELECT E."FirstName",
+					E."Title" AS "Employee Designation",
+					CU."CustomerId",
+					CU."FirstName" AS "CustomerName",
+					ROW_NUMBER() OVER(PARTITION BY E."FirstName") AS ROW_NUM
+				FROM PUBLIC."Employee" E
+				LEFT JOIN PUBLIC."Customer" CU ON CU."SupportRepId" = E."EmployeeId"
+				WHERE CU."CustomerId" IS NOT NULL
+				ORDER BY 1 ASC)V)G
+GROUP BY 1,2,
+	3
+ORDER BY NO_OF_CUSTOMERS DESC
+----------- Which city corresponds to the best customers?---------------------
+
+SELECT X."FirstName",
+	X."CustomerId",
+	X."City",
+	SUM(X."Total") AS SALE
+FROM
+	(SELECT CU."CustomerId",
+			CU."FirstName",
+			CU."City",
+			INV."Total"
+		FROM PUBLIC."Invoice" INV
+		JOIN PUBLIC."Customer" CU ON CU."CustomerId" = INV."CustomerId")X
+GROUP BY 1,2,
+	3
+ORDER BY SALE DESC
+
+---------The highest number of invoices belongs to which country?-------------------------
+
+select  inv."BillingCountry",COUNT( inv."InvoiceId" ) from public."Invoice" inv
+Group by 1
+Order by count desc
+	
+	----Most Popular Genre-------------------------------
+						
+			WITH MOST_POPULAR_GENRE AS
+	(SELECT AR."Name",
+			GE."Name",
+			COUNT(TR."GenreId")
+		FROM PUBLIC."Track" TR
+		JOIN PUBLIC."Genre" GE ON TR."GenreId" = GE."GenreId"
+		JOIN PUBLIC."Album" AL ON AL."AlbumId" = TR."AlbumId"
+		JOIN PUBLIC."Artist" AR ON AR."ArtistId" = AL."ArtistId"
+		GROUP BY 1,2
+		ORDER BY COUNT DESC),
+	RANK_GENRE AS
+	(SELECT *,
+			DENSE_RANK() OVER(
+																					ORDER BY COUNT DESC) AS TOP
+		FROM MOST_POPULAR_GENRE AS MP)
+SELECT *
+FROM RANK_GENRE
+WHERE RANK_GENRE."top" <= 5
